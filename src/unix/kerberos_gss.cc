@@ -422,7 +422,7 @@ gss_result* authenticate_gss_client_wrap(gss_client_state* state,
         memcpy(buf, &buf_size, 4);
         buf[0] = GSS_AUTH_P_NONE;
         // server decides if principal can log in as user
-        strncpy(buf + 4, user, sizeof(buf) - 4);
+        strncpy(buf + 4, user, sizeof(buf) - 4 - 1);
         input_token.value = buf;
         input_token.length = 4 + strlen(user);
     }
@@ -747,13 +747,13 @@ static gss_result* gss_error_result(OM_uint32 err_maj, OM_uint32 err_min) {
             &min_stat, err_maj, GSS_C_GSS_CODE, GSS_C_NO_OID, &msg_ctx, &status_string);
         if (GSS_ERROR(maj_stat))
             break;
-        strncpy(buf_maj, (char*)status_string.value, sizeof(buf_maj));
+        strncpy(buf_maj, (char*)status_string.value, sizeof(buf_maj) - 1);
         gss_release_buffer(&min_stat, &status_string);
 
         maj_stat = gss_display_status(
             &min_stat, err_min, GSS_C_MECH_CODE, GSS_C_NULL_OID, &msg_ctx, &status_string);
         if (!GSS_ERROR(maj_stat)) {
-            strncpy(buf_min, (char*)status_string.value, sizeof(buf_min));
+            strncpy(buf_min, (char*)status_string.value, sizeof(buf_min) - 1);
             gss_release_buffer(&min_stat, &status_string);
         }
     } while (!GSS_ERROR(maj_stat) && msg_ctx != 0);

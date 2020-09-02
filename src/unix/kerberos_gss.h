@@ -88,4 +88,5 @@ gss_result* authenticate_gss_server_step(gss_server_state* state, const char* ch
 gss_result* authenticate_user_krb5pwd(const char* user,
                                       const char* pswd,
                                       const char* service,
-                                      const char* default_realm);
+                                      const char* default_realm,
+                                      int verify_kdc);

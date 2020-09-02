@@ -229,22 +229,25 @@ NAN_METHOD(PrincipalDetails) {
 }
 
 NAN_METHOD(CheckPassword) {
-    std::string username(*Nan::Utf8String(info[0]));
-    std::string password(*Nan::Utf8String(info[1]));
-    std::string service(*Nan::Utf8String(info[2]));
+    int arg = 0, argc = info.Length();
+    std::string username(*Nan::Utf8String(info[--argc, arg++]));
+    std::string password(*Nan::Utf8String(info[--argc, arg++]));
+    std::string service(*Nan::Utf8String(info[--argc, arg++]));
 
     std::string defaultRealm;
-    Nan::Callback* callback;
-    if (info[3]->IsFunction()) {
-        callback = new Nan::Callback(Nan::To<v8::Function>(info[3]).ToLocalChecked());
-    } else {
-        defaultRealm = *Nan::Utf8String(info[3]);
-        callback = new Nan::Callback(Nan::To<v8::Function>(info[4]).ToLocalChecked());
-    }
+    if (argc > 1)
+        defaultRealm = *Nan::Utf8String(info[--argc, arg++]);
+
+    int verify_kdc = 1;
+    if (argc > 1)
+        verify_kdc = Nan::To<int>(info[--argc, arg++]).FromJust();
+
+    Nan::Callback* callback =
+        new Nan::Callback(Nan::To<v8::Function>(info[--argc, arg++]).ToLocalChecked());
 
     KerberosWorker::Run(callback, "kerberos:CheckPassword", [=](KerberosWorker::SetOnFinishedHandler onFinished) {
         std::shared_ptr<gss_result> result(authenticate_user_krb5pwd(
-            username.c_str(), password.c_str(), service.c_str(), defaultRealm.c_str()), ResultDeleter);
+            username.c_str(), password.c_str(), service.c_str(), defaultRealm.c_str(), verify_kdc), ResultDeleter);
 
         return onFinished([=](KerberosWorker* worker) {
             Nan::HandleScope scope;

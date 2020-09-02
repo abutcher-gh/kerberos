@@ -635,7 +635,8 @@ end:
 gss_result* authenticate_user_krb5pwd(const char* user,
                                       const char* pswd,
                                       const char* service,
-                                      const char* default_realm) {
+                                      const char* default_realm,
+                                      int verify_kdc) {
     krb5_context kcontext = NULL;
     krb5_error_code code;
     krb5_principal client = NULL;
@@ -705,14 +706,25 @@ gss_result* authenticate_user_krb5pwd(const char* user,
     if (verifyRet) {
         result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
                                                         verifyRet);
-        krb5_free_cred_contents(kcontext, &creds);
         goto end;
     }
 
-    krb5_free_cred_contents(kcontext, &creds);
+    // verify KDC authenticity
+    if (verify_kdc) {
+       krb5_verify_init_creds_opt vic_options;
+       krb5_verify_init_creds_opt_init(&vic_options);
+       verifyRet = krb5_verify_init_creds(kcontext, &creds, NULL, NULL, NULL, &vic_options);
+       if (verifyRet) {
+           result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
+                                                           verifyRet);
+           goto end;
+       }
+    }
+
     result = gss_success_result(1);
 
 end:
+    krb5_free_cred_contents(kcontext, &creds);
     if (name) {
         free(name);
     }

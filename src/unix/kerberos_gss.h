@@ -89,4 +89,5 @@ gss_result* authenticate_user_krb5pwd(const char* user,
                                       const char* pswd,
                                       const char* service,
                                       const char* default_realm,
+                                      int cache_creds,
                                       int verify_kdc);

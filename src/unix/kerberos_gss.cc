@@ -19,6 +19,7 @@
 #include "base64.h"
 
 #include <arpa/inet.h>
+#include <krb5/krb5.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -636,6 +637,7 @@ gss_result* authenticate_user_krb5pwd(const char* user,
                                       const char* pswd,
                                       const char* service,
                                       const char* default_realm,
+                                      int cache_creds,
                                       int verify_kdc) {
     krb5_context kcontext = NULL;
     krb5_error_code code;
@@ -646,9 +648,11 @@ gss_result* authenticate_user_krb5pwd(const char* user,
     char* name = NULL;
     char* p = NULL;
 
-    // for verify
+    // for verify and cache
     krb5_creds creds;
-    krb5_get_init_creds_opt gic_options;
+    krb5_ccache ccache;
+    krb5_ccache* ccache_opt = NULL;
+    krb5_get_init_creds_opt* gic_options = NULL;
     krb5_error_code verifyRet;
     char *vName = NULL;
 
@@ -671,7 +675,7 @@ gss_result* authenticate_user_krb5pwd(const char* user,
         goto end;
     }
 
-    free(name);
+    krb5_free_unparsed_name(kcontext, name);
     name = NULL;
     name = (char*)malloc(256);
     if (name == NULL) {
@@ -697,12 +701,37 @@ gss_result* authenticate_user_krb5pwd(const char* user,
 
     verifyRet = krb5_unparse_name(kcontext, client, &vName);
     if (verifyRet == 0) {
-        free(vName);
+        krb5_free_unparsed_name(kcontext, vName);
     }
 
-    krb5_get_init_creds_opt_init(&gic_options);
+    krb5_get_init_creds_opt_alloc(kcontext, &gic_options);
+
+    if (cache_creds) {
+        verifyRet = krb5_cc_default(kcontext, &ccache);
+        if (verifyRet) {
+            result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
+                                                            verifyRet);
+            goto end;
+        }
+
+        verifyRet = krb5_get_init_creds_opt_set_in_ccache(kcontext, gic_options, ccache);
+        if (verifyRet) {
+            result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
+                                                            verifyRet);
+            goto end;
+        }
+        verifyRet = krb5_get_init_creds_opt_set_out_ccache(kcontext, gic_options, ccache);
+        if (verifyRet) {
+            result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
+                                                            verifyRet);
+            goto end;
+        }
+        ccache_opt = &ccache;
+    }
+
+    // verify password
     verifyRet = krb5_get_init_creds_password(
-        kcontext, &creds, client, (char*)pswd, NULL, NULL, 0, NULL, &gic_options);
+        kcontext, &creds, client, (char*)pswd, NULL, NULL, 0, NULL, gic_options);
     if (verifyRet) {
         result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
                                                         verifyRet);
@@ -713,7 +742,7 @@ gss_result* authenticate_user_krb5pwd(const char* user,
     if (verify_kdc) {
        krb5_verify_init_creds_opt vic_options;
        krb5_verify_init_creds_opt_init(&vic_options);
-       verifyRet = krb5_verify_init_creds(kcontext, &creds, NULL, NULL, NULL, &vic_options);
+       verifyRet = krb5_verify_init_creds(kcontext, &creds, NULL, NULL, ccache_opt, &vic_options);
        if (verifyRet) {
            result = gss_error_result_with_message_and_code(krb5_get_err_text(kcontext, verifyRet),
                                                            verifyRet);
@@ -724,6 +753,8 @@ gss_result* authenticate_user_krb5pwd(const char* user,
     result = gss_success_result(1);
 
 end:
+    if (gic_options)
+        krb5_get_init_creds_opt_free(kcontext, gic_options);
     krb5_free_cred_contents(kcontext, &creds);
     if (name) {
         free(name);

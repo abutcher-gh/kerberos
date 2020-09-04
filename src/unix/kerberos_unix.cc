@@ -238,6 +238,10 @@ NAN_METHOD(CheckPassword) {
     if (argc > 1)
         defaultRealm = *Nan::Utf8String(info[--argc, arg++]);
 
+    int cache_creds = 0;
+    if (argc > 1)
+        cache_creds = Nan::To<int>(info[--argc, arg++]).FromJust();
+
     int verify_kdc = 1;
     if (argc > 1)
         verify_kdc = Nan::To<int>(info[--argc, arg++]).FromJust();
@@ -247,7 +251,7 @@ NAN_METHOD(CheckPassword) {
 
     KerberosWorker::Run(callback, "kerberos:CheckPassword", [=](KerberosWorker::SetOnFinishedHandler onFinished) {
         std::shared_ptr<gss_result> result(authenticate_user_krb5pwd(
-            username.c_str(), password.c_str(), service.c_str(), defaultRealm.c_str(), verify_kdc), ResultDeleter);
+            username.c_str(), password.c_str(), service.c_str(), defaultRealm.c_str(), cache_creds, verify_kdc), ResultDeleter);
 
         return onFinished([=](KerberosWorker* worker) {
             Nan::HandleScope scope;
